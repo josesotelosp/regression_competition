@@ -1,0 +1,99 @@
+---
+title: "Model set up"
+author: "Jose Sotelo"
+date: "5/19/2021"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(corrr)
+library(alookr)
+
+train <- read_csv("data/train.csv")
+```
+
+
+```{r}
+
+trainc<-train%>%
+  select_if(is.numeric)
+  
+train<-train%>%
+  mutate(addr_state = fct_lump(addr_state, n = 50),
+         application_type= fct_lump(application_type,n=2),
+         emp_length= fct_lump(emp_length,n=9),
+         grade= fct_lump(grade,n=7),
+          home_ownership= fct_lump(home_ownership,n=7),
+         initial_list_status= fct_lump(initial_list_status,n=2),
+         purpose= fct_lump(purpose,n=3),
+         term= fct_lump(term,n=2),
+         verification_status= fct_lump(verification_status,n=2)
+         )
+
+rs <- correlate(trainc)
+any_over_30 <- function(x) any(x > .5, na.rm = TRUE)
+neg_names<-rs %>%
+  focus(money_made_inv)%>%
+  filter(money_made_inv<=-.03)%>%
+  pull(term)
+
+pos_names<-rs %>%
+  focus(money_made_inv)%>%
+  filter(money_made_inv>=.03)%>%
+  pull(term)
+
+comb_names<-c(neg_names,pos_names)
+
+
+```
+
+
+```{r}
+set.seed(1192)
+
+train_spli<-initial_split(train,prop=.70,strata=money_made_inv)
+
+train_train<-training(train_spli)
+
+train_test<-testing(train_spli)
+
+train_folds<-vfold_cv(train_train,v=4,repeats = 3,strata = money_made_inv)
+
+
+```
+
+```{r}
+
+
+train_recipe <- recipe(money_made_inv~annual_inc+avg_cur_bal+loan_amnt+num_sats+out_prncp_inv+tot_cur_bal+acc_open_past_24mths+bc_util+delinq_2yrs+int_rate+pub_rec+total_rec_late_fee+addr_state+application_type+emp_length+grade+home_ownership+initial_list_status+purpose+term+verification_status, data = train_train) %>%
+  step_impute_bag(all_predictors())%>%
+  step_interact(~annual_inc:all_numeric_predictors())%>%
+  step_normalize(all_predictors())%>%
+  step_nzv(all_predictors())
+  
+
+
+```
+
+
+
+
+```{r}
+
+save(train_folds,file = "model_info/train_folds.rda")
+
+save(train_spli,file = "model_info/train_spli.rda")
+
+save(train_recipe,file = "model_info/train_recipe.rda")
+
+save(train_train,file = "model_info/train_train.rda")
+
+save(train_test,file = "model_info/train_test.rda")
+
+
+```
+

@@ -1,0 +1,97 @@
+---
+title: "Model Assesment"
+author: "Jose Sotelo"
+date: "5/13/2021"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(corrr)
+library(alookr)
+
+
+
+load("model_info/rf_tune.rda")
+load("model_info/train_train.rda")
+load("model_info/train_test.rda")
+load("model_info/train_folds.rda")
+load("model_info/train_spli.rda")
+load("model_info/train_recipe.rda")
+load("model_info/train_train.rda")
+load("model_info/train_test.rda")
+test <- read_csv("data/test.csv")
+
+
+
+```
+
+```{r}
+# Define model ----
+rf_model <- rand_forest(
+  mtry = tune(),
+  min_n = tune()
+) %>%
+  set_mode("regression") %>%
+  set_engine("ranger", importance = "impurity")
+
+
+# set-up tuning grid ----
+
+# update parameters
+rf_params <- parameters(rf_model)  %>%
+  update(mtry = mtry(range = c(2, 25)))
+
+# define tuning grid
+rf_grid <- grid_regular(rf_params, levels = 5)
+
+# workflow ----
+rf_workflow <- workflow() %>%
+  add_model(rf_model) %>%
+  add_recipe(train_recipe)
+
+```
+
+
+```{r}
+rf_tune %>% 
+  show_best(metric = "rmse")
+
+rf_best <- rf_tune %>% 
+  select_best(metric = "rmse")
+rf_best
+
+train_tuned <- rf_workflow  %>% 
+  finalize_workflow(select_best(rf_tune, metric = "rmse"))
+
+
+train_results <- fit(train_tuned, train_train)
+
+
+```
+
+
+
+
+
+```{r}
+rf_pred<-predict(train_results, new_data = train_test%>% select(-money_made_inv))
+
+rf_predf<-predict(train_results, new_data = test)
+
+rf_mos<- bind_cols(train_test %>% select(id),rf_pred)
+
+rf_fin <- bind_cols(test %>% select(id),rf_predf)%>%
+  rename(Id=id,
+         Predicted=.pred)
+
+write_csv(rf_fin,file="data/js_regf.csv")
+
+
+
+
+```
+
